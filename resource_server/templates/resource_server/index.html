@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Resource</title>
+</head>
+<body>
+    <ul>
+        <li> Process ID || Sequence Number || Description </li>
+    </ul>
+    {% if resource_list %}
+        <ul>
+        {% for resource in resource_list %}
+            <li>{{ resource.process_id }} || {{resource.sequence_number}} || {{resource.description}}</li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No resources are available.</p>
+    {% endif %}
+</body>
+</html>
