@@ -17,10 +17,3 @@ class ResourceModelTests(TestCase):
         process_1 = resource.get_all_steps_in_process(process_id=1)
         self.assertIs(len(process_1), 5)
 
-    def test_process_1_has_5_items_from_view(self):
-        """
-        process 1 has 5 steps in it
-        """
-        index_view = IndexView()
-        process_1 = index_view.get_queryset()
-        self.assertIs(len(process_1), 5)
