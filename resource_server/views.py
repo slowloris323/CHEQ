@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from rest_framework.parsers import JSONParser
 from .serializers import ResourceSerializer, ResourceToConfirmationMappingSerializer
 import io
+from datetime import datetime
+from .services import SignatureService
 
 host = "http://127.0.0.1:8080"
 class IndexView(generic.ListView):
@@ -30,6 +32,45 @@ class ResourceView(APIView):
         else:
             return Response(self, 500)
 
+class ResourceCHEQView(APIView):
+    def get(self, request, process_id):
+        #TODO: this needs to be gated behind confirmation server auth
+        if process_id:
+            if type(process_id) is int:
+                resources = Resource.objects.filter(process_id=process_id)
+                serializer = ResourceSerializer(resources, many=True)
+                resource_execution_uri = host + reverse("resource_server:resource", kwargs={"process_id":process_id}) + "execute"
+
+                CHEQ = {
+                    "version": 1.0,
+                    "operation": resource_execution_uri,
+                    "operation name": process_id,
+                    "inputs" :{
+                        "parameters" : serializer.data
+                    },
+                    "date": datetime.now()
+                }
+                signedCHEQ = SignatureService.sign(self, CHEQ)
+                return Response(signedCHEQ, 200)
+            else:
+                return Response(self, 422)
+        else:
+            return Response(self, 500)
+
+class ResourceExecView(APIView):
+    # TODO: implement the execution thoughtfully, this is just a placeholder
+    def get(self, request, process_id):
+        if process_id:
+            if type(process_id) is int:
+                resources = Resource.objects.filter(process_id=process_id)
+                serializer = ResourceSerializer(resources, many=True)
+                return Response(serializer.data)
+            else:
+                return Response(self, 422)
+        else:
+            return Response(self, 500)
+
+
 class ResultView(APIView):
     def get(self, request, process_id):
         if process_id:
@@ -42,7 +83,7 @@ class ResultView(APIView):
         else:
             return Response(self, 500)
 
-class ProcessExecution(APIView):
+class ProcessExecutionWithConfirmation(APIView):
     def post(self, request):
         # This is where the AI agent will ask for an action to be performed
         # Respond with 202, resource URI, and confirmation URI
@@ -73,3 +114,7 @@ class ProcessExecution(APIView):
             "result_uri": result_uri
         }
         return Response(response, status=202)
+
+#TODO:
+# implement API endpoint that provides public key for signature verification
+# implement confirmation server auth
