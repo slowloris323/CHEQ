@@ -17,7 +17,7 @@ class IndexView(generic.ListView):
         return True
 
 class TriggerView(APIView):
-    def get(self, request):
+    def get(self, request, resource_uri):
         triggers = Trigger.objects.all()
         serializer = TriggerSerializer(triggers, many=True)
         return Response(serializer.data)
