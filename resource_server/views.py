@@ -9,7 +9,7 @@ import io
 from datetime import datetime
 from .services import SignatureService
 
-host = "http://127.0.0.1:8080"
+host = "http://127.0.0.1:8000"
 class IndexView(generic.ListView):
     template_name = "resource_server/index.html"
     context_object_name = "resource_list"
