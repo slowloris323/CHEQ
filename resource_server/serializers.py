@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Resource, ResourceToConfirmationMapping
+from .models import Resource, ResourceToConfirmationMapping, Result
 
 class ResourceSerializer(serializers.ModelSerializer):
     class Meta:
@@ -10,4 +10,10 @@ class ResourceSerializer(serializers.ModelSerializer):
 class ResourceToConfirmationMappingSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResourceToConfirmationMapping
+        fields = '__all__'
+
+
+class ResultSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Result
         fields = '__all__'

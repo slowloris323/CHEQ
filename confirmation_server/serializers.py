@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from .models import Trigger
+from .models import ResourceUriCheqMapping
 
-class TriggerSerializer(serializers.ModelSerializer):
+class ResourceUriCheqMappingSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Trigger
+        model = ResourceUriCheqMapping
         fields = '__all__'
+

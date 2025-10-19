@@ -68,10 +68,26 @@
     }
   },
     {
+    "model": "resource_server.resourcetoconfirmationmapping",
+    "pk": 2,
+    "fields": {
+      "process_id": "2",
+      "confirmation_uri": "http://127.0.0.1:8000/confirmation_server/trigger_confirmation"
+    }
+  },
+    {
     "model": "resource_server.result",
     "pk": 1,
     "fields": {
       "process_id": "1",
+      "confirmation_status": "PENDING"
+    }
+  },
+  {
+    "model": "resource_server.result",
+    "pk": 2,
+    "fields": {
+      "process_id": "2",
       "confirmation_status": "PENDING"
     }
   }
