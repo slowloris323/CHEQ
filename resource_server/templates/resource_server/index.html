@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Resource Server</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'resource_server/css/resource_style.css' %}">
 </head>
 <body>
+<h1>Resource Server</h1>
 <p>Process ID || Sequence Number || Description</p>
     {% if resource_list %}
         <ul>

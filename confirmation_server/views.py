@@ -17,7 +17,7 @@ valid_decisions = ["ACCEPT", "REJECT"]
 host = "http://127.0.0.1:8000"
 
 class IndexView(generic.ListView):
-    template_name = "confirmation_server/index.html"
+    template_name = "confirmation_server/trigger_confirmation.html"
     context_object_name = "confirmation_server_landing"
 
     def get_queryset(self):
@@ -28,25 +28,23 @@ class IndexView(generic.ListView):
         return True
 
 class TriggerView(APIView):
-    template_name = "confirmation_server/request_confirmation.html"
-
     def post(self, request):
         #TODO: implement user auth
         data = request.data
         #first need to validate and extract the resource URI
         if type(data) is not dict:
-            return Response(415)
+            return Response(status=415)
         if len(data.keys()) != 1:
-            return Response(422)
+            return Response(status=422)
         if "resource_uri" not in data.keys():
-            return Response(422)
+            return Response(status=422)
         resource_uri_validator = URLValidator(schemes=['http', 'https'])
         try:
             resource_uri = data['resource_uri']
             resource_uri_validator(resource_uri)
         except ValidationError as e:
             print(f"Invalid resource URI: {e}")
-            return Response(422)
+            return Response(status=422)
 
         try:
             response = ConfirmationService.retrieveCHEQ(self, resource_uri)
@@ -60,9 +58,11 @@ class TriggerView(APIView):
 
             perform_confirmation_uri = host + reverse("confirmation_server:perform")
             response["perform_confirmation_uri"] = perform_confirmation_uri
-            return Response(response, 200)
+            return Response(response, status=200)
+        except IndexError: #this gets raised by the confirmation if the resource server responds with 404 when looking for a CHEQ
+            return Response(status=404)
         except Exception as e:
-            return Response(500)
+            return Response(status=500)
 
 class PerformView(APIView):
     def post(self, request):
@@ -70,11 +70,11 @@ class PerformView(APIView):
         #Input validation
         #{"resource_uri": "http://127.0.0.1:8000/resource_server/resource/1/", "decision": "accept"}
         if type(data) is not dict:
-            return Response(415)
+            return Response(status=415)
         if len(data.keys()) != 2:
-            return Response(422)
+            return Response(status=422)
         if ("resource_uri" not in data.keys()) and ("decision" not in data.keys):
-            return Response("Request boy must contain resource_uri and decision clauses", 422)
+            return Response("Request body must contain resource_uri and decision clauses", status=422)
 
         resource_uri_validator = URLValidator(schemes=['http', 'https'])
         try:
@@ -82,11 +82,11 @@ class PerformView(APIView):
             resource_uri_validator(resource_uri)
         except ValidationError as e:
             print(f"Invalid resource URI: {e}")
-            return Response("Invalid resource URI", 422)
+            return Response("Invalid resource URI", status=422)
 
         if data["decision"] not in valid_decisions:
             print(f"Invalid decision")
-            return Response("Invalid decision", 422)
+            return Response("Invalid decision", status=422)
         else:
             decision = data["decision"]
 
@@ -99,13 +99,13 @@ class PerformView(APIView):
                 CHEQ = CHEQ_serializer.data[0]['CHEQ']['CHEQ']
                 response = ConfirmationService.sendDecisionToRS(self, CHEQ, decision, resource_uri)
                 if response.status_code == 200:
-                    return Response("Decision sent", 200)
+                    return Response("Decision sent", status=200)
                 else:
-                    return Response(response, 400)
+                    return Response(response, status=400)
             else:
-                return Response("No CHEQ object registered for this resource URI", 400)
+                return Response("No CHEQ object registered for this resource URI", status=400)
         except Exception as e:
-            return Response("No CHEQ object registered for this resource URI", 400)
+            return Response("No CHEQ object registered for this resource URI", status=400)
 
 
 

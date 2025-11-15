@@ -9,6 +9,8 @@ class ConfirmationService:
             #TODO: validate that the resource_uri is pointing to a trusted resource-server
             cheq_endpoint = resource_uri + "cheq"
             response = requests.get(cheq_endpoint)
+            if response.status_code == 404:
+                raise IndexError#getting a 500 here instead of 404
             #TODO: authenticate to the resource server
             CHEQ = response.text
             if CHEQ[-1] == '"':

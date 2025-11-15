@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URI Submission</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'confirmation_server/css/confirmation_style.css' %}">
+</head>
+<body>
+    <h1>Trigger Confirmation</h1>
+    <input type="text" id="uriInput" placeholder="Enter URI here">
+    <p> </p>
+    <button id="submitButton">Trigger Confirmation</button>
+    <ul id="businessProcess"></ul>
+    <div id="responseMessage">
+    </div>
+    <script>
+        document.getElementById('submitButton').addEventListener('click', function() {
+            const resourceUri = document.getElementById('uriInput').value;
+            const data = { 'resource_uri': resourceUri }; // Create JSON object
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/confirmation_server/trigger_confirmation', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('X-CSRFToken', getCookie('csrftoken')); // Include CSRF token for Django
+
+            xhr.onload = function() {
+                if (xhr.readyState === 4) {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        const response = JSON.parse(xhr.responseText);
+                        steps = response.CHEQ.inputs.parameters;
+                        const processListElement = document.getElementById('businessProcess');
+                        // first remove existing business processes
+                        if (processListElement) {
+                            processListElement.innerHTML = "";
+                        }
+                        steps.forEach(step => {
+                            const listItem = document.createElement('li');
+                            listItem.innerHTML = `Process ${step.process_id}, Step ${step.sequence_number}: ${step.description}`;
+                            processListElement.append(listItem)
+                        });
+
+
+                        const responseMessage = document.getElementById('responseMessage')
+                        if (responseMessage) {
+                            responseMessage.innerHTML = "";
+                        }
+
+                        performConfirmationUri = response.perform_confirmation_uri
+                        const acceptButton = document.createElement('button')
+                        acceptButton.innerHTML = 'Accept'
+                        acceptButton.id = 'acceptButton';
+                        responseMessage.append(acceptButton);
+
+                        acceptButton.addEventListener('click', function() {
+                            const confirmationUri = performConfirmationUri;
+                            const acceptXhr = new XMLHttpRequest();
+                            const data = {
+                                'resource_uri': resourceUri,
+                                'decision': 'ACCEPT'
+                            }; // Create JSON object
+                            acceptXhr.open('POST', confirmationUri, true);
+                            acceptXhr.setRequestHeader('Content-Type', 'application/json');
+                            acceptXhr.setRequestHeader('X-CSRFToken', getCookie('csrftoken'));
+                            acceptXhr.onload = function() {
+                                if (acceptXhr.readyState === 4) {
+                                    if (acceptXhr.status >= 200 && acceptXhr.status < 300) {
+                                        document.getElementById('responseMessage').textContent = 'Process accepted, your agent will be notified via the resource server';
+                                        document.getElementById('responseMessage').style.color = 'green';
+                                    } else {
+                                        document.getElementById('responseMessage').innerText = 'Error: ' + acceptXhr.status + ' - ' + acceptXhr.statusText + ' ' + acceptXhr.responseText;
+                                        document.getElementById('responseMessage').style.color = 'red';
+                                    }
+                                }
+                            };
+                            acceptXhr.onerror = function() {
+                                const processListElement = document.getElementById('businessProcess');
+                                if (processListElement) {
+                                    processListElement.innerHTML = "";
+                                }
+                                const responseMessage = document.getElementById('responseMessage')
+                                if (responseMessage) {
+                                    responseMessage.innerHTML = "";
+                                }
+                                responseMessage.textContent = 'Network error occurred.';
+                                responseMessage.style.color = 'red';
+                            };
+                            acceptXhr.send(JSON.stringify(data)); // Send JSON data
+                        })
+
+                        const rejectButton = document.createElement('button')
+                        rejectButton.innerHTML = 'Reject'
+                        rejectButton.id = 'rejectButton';
+                        responseMessage.append(rejectButton);
+
+                        rejectButton.addEventListener('click', function() {
+                            const confirmationUri = performConfirmationUri;
+                            const rejectXhr = new XMLHttpRequest();
+                            const data = {
+                                'resource_uri': resourceUri,
+                                'decision': 'REJECT'
+                            }; // Create JSON object
+                            rejectXhr.open('POST', confirmationUri, true);
+                            rejectXhr.setRequestHeader('Content-Type', 'application/json');
+                            rejectXhr.setRequestHeader('X-CSRFToken', getCookie('csrftoken'));
+                            rejectXhr.onload = function() {
+                                if (rejectXhr.readyState === 4) {
+                                    if (rejectXhr.status >= 200 && rejectXhr.status < 300) {
+                                        document.getElementById('responseMessage').textContent = 'Process rejected, your agent will be notified';
+                                        document.getElementById('responseMessage').style.color = 'green';
+                                    } else {
+                                        document.getElementById('responseMessage').innerText = 'Error: ' + rejectXhr.status + ' - ' + rejectXhr.statusText + ' ' + rejectXhr.responseText;
+                                        document.getElementById('responseMessage').style.color = 'red';
+                                    }
+                                }
+                            };
+                            rejectXhr.onerror = function() {
+                                const processListElement = document.getElementById('businessProcess');
+                                if (processListElement) {
+                                    processListElement.innerHTML = "";
+                                }
+                                const responseMessage = document.getElementById('responseMessage')
+                                if (responseMessage) {
+                                    responseMessage.innerHTML = "";
+                                }
+                                responseMessage.textContent = 'Network error occurred.';
+                                responseMessage.style.color = 'red';
+                            };
+                            rejectXhr.send(JSON.stringify(data)); // Send JSON data
+                        })
+
+                    } else {
+                        const processListElement = document.getElementById('businessProcess');
+                        if (processListElement) {
+                            processListElement.innerHTML = "";
+                        }
+                        const responseMessage = document.getElementById('responseMessage')
+                        if (responseMessage) {
+                            responseMessage.innerHTML = "";
+                        }
+                        responseMessage.innerText = 'Error: ' + xhr.status + ' - ' + xhr.statusText;
+                        responseMessage.style.color = 'red';
+                    }
+                }
+            };
+
+            xhr.onerror = function() {
+                const processListElement = document.getElementById('businessProcess');
+                if (processListElement) {
+                    processListElement.innerHTML = "";
+                }
+                const responseMessage = document.getElementById('responseMessage')
+                if (responseMessage) {
+                    responseMessage.innerHTML = "";
+                }
+                responseMessage.innerText = 'Error: ' + xhr.status + ' - ' + xhr.statusText;
+                responseMessage.textContent = 'Network error occurred.';
+                responseMessage.style.color = 'red';
+            };
+
+            xhr.send(JSON.stringify(data)); // Send JSON data
+        });
+
+        // Function to get CSRF token from cookies
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    // Does this cookie string begin with the name we want?
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>

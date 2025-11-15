@@ -1,0 +1,53 @@
+/* confirmation_style.css */
+
+/* Custom Font Import */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+
+body {
+    font-family: 'Roboto', sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f8f8f8;
+}
+
+h1 {
+    color: #007bff;
+    text-align: center;
+}
+
+/* Card with subtle shadow */
+.card {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+/* Button with hover effect */
+.button {
+    background-color: #007bff;
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+
+p {
+    line-height: 1.6;
+}
+
+
+.button:hover {
+    background-color: #0056b3;
+}
+
+/* Responsive Image */
+img {
+    max-width: 100%;
+    height: auto;
+    display: block; /* Removes extra space below image */
+}
