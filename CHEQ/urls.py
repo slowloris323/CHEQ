@@ -22,4 +22,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path("confirmation_server/", include("confirmation_server.urls", namespace="confirmation_server")),
     path("resource_server/", include("resource_server.urls", namespace="resource_server")),
+    path("ai_agent/", include("ai_agent.urls", namespace="ai_agent")),
 ]
