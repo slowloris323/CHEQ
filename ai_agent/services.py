@@ -2,12 +2,20 @@ import anthropic
 import httpx
 import time
 import os
+import requests
+from anyio.lowlevel import checkpoint
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langchain_core.messages import HumanMessage, AIMessage
+
 
 class AgentService:
     def __init__(self):
         self.client = anthropic.Anthropic(
             api_key=os.getenv("ANTHROPIC_API_KEY"),
         )
+
+        self.memory = SqliteSaver.from_conn_string("cheq_memory.db")
+        self.memory.setup()
 
         self.tools = [
             {
@@ -25,17 +33,34 @@ class AgentService:
                 }
             }
         ]
+    # we take in 2 params user_message now we are taking in with the session id which will get form the django session key
 
-    def chat(self, user_message):
+    def chat(self, user_message, session_id="default"):
 
-        messages = [{"role": "user", "content": user_message}]
+        # loading the previous conversation
+        thread_id = f"session_{session_id}"
+        config = {"configurable": {"thread_id": thread_id}}
+
+        checkpoint = self.memory.get_tuple(config)
+        if checkpoint and checkpoint.checkpoint:
+            messages = checkpoint.checkpoint.get("messages",[])
+        else:
+            message = []
+
+        # add current user message
+        messages.append(HumanMessage(content=user_message))
+
+        # convert to anthropic format
+        anthropic_message = self._convert_to_anthropic_format(messages)
+
+        # messages = [{"role": "user", "content": user_message}]
 
         while True:
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=1024,
                 tools=self.tools,
-                messages=messages
+                messages= anthropic_message
             )
 
             if response.stop_reason == "tool_use":
@@ -51,15 +76,43 @@ class AgentService:
                                 "tool_use_id": block.id,
                                 "content": str(result)
                             })
-                messages.append({"role": "assistant", "content": response.content})
-                messages.append({"role": "user", "content": tool_results})
+                anthropic_message.append({"role": "assistant", "content": response.content})
+                anthropic_message.append({"role": "user", "content": tool_results})
             else:
+                final_response =""
                 for block in response.content:
                     if hasattr(block, "text"):
-                        return block.text
-                break
+                        final_response = block.text
+                        break
+
+                messages.append(AIMessage(content=final_response))
+
+                self.memory.put(
+                    config,
+                    {"messages": messages},
+                    {}
+                )
+                return final_response
+
         return "No response generated"
 
+    def _convert_to_anthropic_format(self, messages):
+        """Convert LangChain messages to Anthropic API format"""
+        anthropic_messages = []
+
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                anthropic_messages.append({
+                    "role": "user",
+                    "content": msg.content
+                })
+            elif isinstance(msg, AIMessage):
+                anthropic_messages.append({
+                    "role": "assistant",
+                    "content": msg.content
+                })
+
+        return anthropic_messages
     def execute_cheq_flow(self, process_id):
         try:
 
@@ -114,5 +167,14 @@ class AgentService:
 
         return f"Timeout: No confirmation received for process {process_id} within {max_attempts * interval} seconds."
 
+    def clear_memory(self, session_id="default"):
+        """Clear conversation memory for a session"""
+        thread_id = f"session_{session_id}"
+        config = {"configurable": {"thread_id": thread_id}}
 
+        self.memory.put(
+            config,
+            {"messages": []},
+            {}
+        )
 
