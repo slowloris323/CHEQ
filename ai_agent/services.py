@@ -45,12 +45,12 @@ class AgentService:
         if checkpoint and checkpoint.checkpoint:
             messages = checkpoint.checkpoint.get("messages",[])
         else:
-            message = []
+            messages = []
 
-        # add current user message
+
         messages.append(HumanMessage(content=user_message))
 
-        # convert to anthropic format
+
         anthropic_message = self._convert_to_anthropic_format(messages)
 
         # messages = [{"role": "user", "content": user_message}]
@@ -93,7 +93,6 @@ class AgentService:
                     {}
                 )
                 return final_response
-
         return "No response generated"
 
     def _convert_to_anthropic_format(self, messages):
