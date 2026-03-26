@@ -1,3 +1,6 @@
+import sqlite3
+import uuid
+from datetime import datetime, timezone
 import anthropic
 import httpx
 import time
@@ -14,7 +17,13 @@ class AgentService:
             api_key=os.getenv("ANTHROPIC_API_KEY"),
         )
 
-        self.memory = SqliteSaver.from_conn_string("cheq_memory.db")
+        # self.memory = SqliteSaver.from_conn_string("cheq_memory.db")
+        # self.memory.setup()
+
+        self.db_conn = sqlite3.connect("cheq_memory.db", check_same_thread=False)
+        # 2. Pass it directly to SqliteSaver
+        self.memory = SqliteSaver(self.db_conn)
+        # 3. Now you can call setup() directly
         self.memory.setup()
 
         self.tools = [
@@ -39,11 +48,12 @@ class AgentService:
 
         # loading the previous conversation
         thread_id = f"session_{session_id}"
-        config = {"configurable": {"thread_id": thread_id}}
-
+        # "config = {"configurable": {"thread_id": thread_id}}"
+        config = {"configurable": {"thread_id": thread_id,
+                                   "checkpoint_ns": ""}}
         checkpoint = self.memory.get_tuple(config)
         if checkpoint and checkpoint.checkpoint:
-            messages = checkpoint.checkpoint.get("messages",[])
+            messages = checkpoint.checkpoint.get("channel_values", {}).get("messages", [])
         else:
             messages = []
 
@@ -87,11 +97,28 @@ class AgentService:
 
                 messages.append(AIMessage(content=final_response))
 
+                checkpoint_data = {
+                    "v": 1,
+                    "id": str(uuid.uuid4()),
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "channel_values": {"messages": messages},
+                    "channel_versions": {},
+                    "versions_seen": {},
+                    "pending_sends": [],
+                }
+
                 self.memory.put(
                     config,
-                    {"messages": messages},
+                    checkpoint_data,  # Use the structured object
+                    {},
                     {}
                 )
+                # self.memory.put(
+                #     config,
+                #     {"messages": messages},
+                #     {},
+                #     {}
+                # ) this was resulting in an error because we didn't have a full check object so there were missing params
                 return final_response
         return "No response generated"
 
@@ -174,6 +201,7 @@ class AgentService:
         self.memory.put(
             config,
             {"messages": []},
+            {},
             {}
         )
 

@@ -7,15 +7,18 @@ from .services import AgentService
 class ChatView(APIView):
     def post(self, request):
         user_message = request.data.get('message')
+        session_id = request.data.get('session_id')
 
         if not user_message:
             return Response(
                 {"error": "No message provided"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        if not request.session.session_key:
-            request.session.create()
-        session_id = request.session.session_key
+        if not session_id:
+            return Response(
+                {"error": "No session_id provided"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             agent = AgentService()
@@ -36,12 +39,13 @@ class ClearMemoryView(APIView):
 
     def post(self, request):
 
-        if not not request.session.session_key:
+        session_id = request.body.get("session_id")
+        if session_id:
             return Response(
                 {"error": "No session_id provided"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        session_id = request.session.session_key
+
         try:
             agent = AgentService()
             agent.clear_memory(session_id=session_id)
