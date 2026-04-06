@@ -8,22 +8,16 @@ import os
 import requests
 from anyio.lowlevel import checkpoint
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langchain_core.messages import HumanMessage, AIMessage
-
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_anthropic import ChatAnthropic
 
 class AgentService:
     def __init__(self):
-        self.client = anthropic.Anthropic(
-            api_key=os.getenv("ANTHROPIC_API_KEY"),
-        )
-
-        # self.memory = SqliteSaver.from_conn_string("cheq_memory.db")
-        # self.memory.setup()
-
+        self.api_key=os.getenv("ANTHROPIC_API_KEY")
         self.db_conn = sqlite3.connect("cheq_memory.db", check_same_thread=False)
-        # 2. Pass it directly to SqliteSaver
+
         self.memory = SqliteSaver(self.db_conn)
-        # 3. Now you can call setup() directly
+
         self.memory.setup()
 
         self.tools = [
@@ -42,61 +36,41 @@ class AgentService:
                 }
             }
         ]
-    # we take in 2 params user_message now we are taking in with the session id which will get form the django session key
-
     def chat(self, user_message, session_id="default"):
 
-        # loading the previous conversation
         thread_id = f"session_{session_id}"
-        # "config = {"configurable": {"thread_id": thread_id}}"
-        config = {"configurable": {"thread_id": thread_id,
-                                   "checkpoint_ns": ""}}
+        config = {"configurable":
+                      {"thread_id": thread_id, "checkpoint_ns": ""}
+                  }
         checkpoint = self.memory.get_tuple(config)
         if checkpoint and checkpoint.checkpoint:
             messages = checkpoint.checkpoint.get("channel_values", {}).get("messages", [])
         else:
             messages = []
 
-
         messages.append(HumanMessage(content=user_message))
-
-
-        anthropic_message = self._convert_to_anthropic_format(messages)
-
-        # messages = [{"role": "user", "content": user_message}]
+        llm = ChatAnthropic(
+                model="claude-sonnet-4-20250514",
+                anthropic_api_key = self.api_key,
+            ).bind_tools(self.tools)
 
         while True:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1024,
-                tools=self.tools,
-                messages= anthropic_message
-            )
 
-            if response.stop_reason == "tool_use":
-                tool_results = []
+            response = llm.invoke(messages)
+            messages.append(response)
 
-                for block in response.content:
-                    if block.type == "tool_use":
-                        if block.name == "execute_process":
-                            result = self.execute_cheq_flow(block.input["process_id"])
+            if response.tool_calls:
+                for tool_call in response.tool_calls:
+                    if tool_call in response.tool_calls:
+                        result = self.execute_cheq_flow(tool_call["args"]["process_id"])
 
-                            tool_results.append({
-                                "type": "tool_result",
-                                "tool_use_id": block.id,
-                                "content": str(result)
-                            })
-                anthropic_message.append({"role": "assistant", "content": response.content})
-                anthropic_message.append({"role": "user", "content": tool_results})
+                        messages.append(ToolMessage(
+                            tool_call_id = tool_call["id"],
+                            content = str(result)
+                        ))
+                continue
             else:
-                final_response =""
-                for block in response.content:
-                    if hasattr(block, "text"):
-                        final_response = block.text
-                        break
-
-                messages.append(AIMessage(content=final_response))
-
+                final_response = response.content
                 checkpoint_data = {
                     "v": 1,
                     "id": str(uuid.uuid4()),
@@ -109,36 +83,12 @@ class AgentService:
 
                 self.memory.put(
                     config,
-                    checkpoint_data,  # Use the structured object
+                    checkpoint_data,
                     {},
                     {}
                 )
-                # self.memory.put(
-                #     config,
-                #     {"messages": messages},
-                #     {},
-                #     {}
-                # ) this was resulting in an error because we didn't have a full check object so there were missing params
                 return final_response
-        return "No response generated"
 
-    def _convert_to_anthropic_format(self, messages):
-        """Convert LangChain messages to Anthropic API format"""
-        anthropic_messages = []
-
-        for msg in messages:
-            if isinstance(msg, HumanMessage):
-                anthropic_messages.append({
-                    "role": "user",
-                    "content": msg.content
-                })
-            elif isinstance(msg, AIMessage):
-                anthropic_messages.append({
-                    "role": "assistant",
-                    "content": msg.content
-                })
-
-        return anthropic_messages
     def execute_cheq_flow(self, process_id):
         try:
 
@@ -194,7 +144,6 @@ class AgentService:
         return f"Timeout: No confirmation received for process {process_id} within {max_attempts * interval} seconds."
 
     def clear_memory(self, session_id="default"):
-        """Clear conversation memory for a session"""
         thread_id = f"session_{session_id}"
         config = {"configurable": {"thread_id": thread_id}}
 
