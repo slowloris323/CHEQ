@@ -6,10 +6,8 @@ import anthropic
 import httpx
 import time
 import os
-import requests
-from anyio.lowlevel import checkpoint
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage,  ToolMessage
 from langchain_anthropic import ChatAnthropic
 
 class AgentService:
@@ -23,19 +21,6 @@ class AgentService:
 
         self.tools = [
             {
-                # "name": "execute_process",
-                # "description": "Execute a business process with human-in-the-loop confirmation via the CHEQ protocol",
-                # "input_schema": {
-                #     "type": "object",
-                #     "properties": {
-                #         "process_id": {
-                #             "type": "integer",
-                #             "description": "The ID of the business process to execute (1 or 2 or 3)"
-                #         }
-                #     },
-                #     "required": ["process_id"]
-                # },
-
                     "name": "execute_process",
                     "description": "Executes a specific business process by ID. Use this to trigger workflows like flight bookings (ID: 10), hardware requests (ID: 11), or software access (ID: 12). The process will require human-in-the-loop confirmation via the CHEQ protocol.",
                     "input_schema": {
@@ -107,6 +92,19 @@ class AgentService:
                     {}
                 )
                 return final_response
+
+    def create_process(self, process_id):
+
+        try:
+            response = httpx.post(
+                'http://127.0.0.1:8000/resource_server/create_process/',
+                json={"process_id": process_id},
+                timeout=10.0
+            )
+            if response.status_code == 201:
+                return "Process created"
+        except Exception as e:
+            return f"Error creating process"
 
     def create_process(self, process_id):
 

@@ -3,7 +3,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .services import AgentService
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ChatView(APIView):
     def post(self, request):
         user_message = request.data.get('message')
@@ -34,13 +37,15 @@ class ChatView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+@method_decorator(csrf_exempt, name='dispatch')
 class ClearMemoryView(APIView):
     """Clear conversation memory"""
 
     def post(self, request):
 
-        session_id = request.body.get("session_id")
-        if session_id:
+        session_id = request.data.get("session_id")
+        if not session_id:
             return Response(
                 {"error": "No session_id provided"},
                 status=status.HTTP_400_BAD_REQUEST

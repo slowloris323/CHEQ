@@ -5,7 +5,7 @@ class ConfirmationStatus(models.TextChoices):
     PENDING = "pending"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
-
+# todo have one consolidated table
 class Resource(models.Model):
     process_id = models.IntegerField() #this is meant to denote a set of steps within a business process
     sequence_number = models.IntegerField() #this is the number within a sequence of steps representing its order in a business process
@@ -13,7 +13,7 @@ class Resource(models.Model):
     pub_date = models.DateTimeField("date published")
 
     def __str__(self):
-        return f"Process {self.process_id}, Step {self.sequence_number}"
+        return f"{self.process_id}, {self.sequence_number}"
 
     def get_all_steps_in_process(self, process_id):
         return self.process_id == process_id
@@ -23,7 +23,7 @@ class ResourceToConfirmationMapping(models.Model):
     confirmation_uri = models.URLField() #this is the confirmation URI
 
     def __str__(self):
-        return f"Process {self.process_id} -> {self.confirmation_uri}"
+        return f"{self.process_id}, {self.confirmation_uri}"
 
     def get_confirmation_uri(self, process_id):
         return self.process_id == process_id
@@ -37,7 +37,7 @@ class Result(models.Model):
     ) #this is the status of confirmation
 
     def __str__(self):
-        return f"Process {self.process_id}: {self.confirmation_status}"
+        return f"{self.process_id}, {self.confirmation_status}"
 
     def get_all_confirmation_status(self, process_id):
         return self.process_id == process_id
