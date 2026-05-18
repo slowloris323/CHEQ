@@ -41,3 +41,14 @@ class Result(models.Model):
 
     def get_all_confirmation_status(self, process_id):
         return self.process_id == process_id
+
+
+class Process(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Process {self.id}"

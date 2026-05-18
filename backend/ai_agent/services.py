@@ -43,8 +43,8 @@ class AgentService:
                                 "description": " a date that can be dd-mm-yyyy or mm-dd-yyyy",
                             },
                             "type":{
-                                "type": "string",
-                                "description": "Is it a round trip or one way"
+                                "type": "integer",
+                                "description": "Is it a round trip or one way eg if round trip then 1 (default), 2 for One way and 3 for Multi-city"
                             }
                         },
                         "required": ["origin","destination","outbound_date","return_date","type"]
@@ -111,7 +111,7 @@ class AgentService:
 
             response = httpx.post(
                 'http://127.0.0.1:8000/resource_server/execute_process_with_confirmation/',
-                json={"parameters": params},
+                json= params,
                 timeout=10.0
             )
 
