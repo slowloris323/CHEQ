@@ -8,9 +8,8 @@ class ConfirmationStatus(models.TextChoices):
 # todo have one consolidated table
 class Resource(models.Model):
     process_id = models.IntegerField() #this is meant to denote a set of steps within a business process
-    sequence_number = models.IntegerField() #this is the number within a sequence of steps representing its order in a business process
-    description = models.CharField(max_length=200) #this is information about the step
     pub_date = models.DateTimeField("date published")
+    flight_data = models.JSONField()
 
     def __str__(self):
         return f"{self.process_id}, {self.sequence_number}"
@@ -41,3 +40,14 @@ class Result(models.Model):
 
     def get_all_confirmation_status(self, process_id):
         return self.process_id == process_id
+
+
+class Process(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Process {self.id}"
