@@ -137,19 +137,26 @@ class ProcessExecutionWithConfirmation(APIView):
         # if type(data["process_id"]) is not int:
         #     return Response(status=422)
 
-        flights = requests.post("http://127.0.0.1:8000/airline_api/search_flights/", json=params)
-
+        response = requests.post("http://127.0.0.1:8000/airline_api/search_flights/", json=params)
+        flights = response.json()
 
         #  this creates our process id then the Creates ResourceToConfirmationMapping
         process = Process.objects.create()
         process_id = process.id
+
         if not ResourceToConfirmationMapping.objects.filter(process_id=process_id).exists():
             ResourceToConfirmationMapping.objects.create(
                 process_id=process_id,
-                confirmation_uri=f"http://127.0.0.1:8000/confirmation_server/trigger_confirmation"
+                confirmation_uri=f"http://127.0.0.1:8000/confirmation_server/trigger_confirmation/"
                 # or whatever your confirmation URI should be
             )
 
+        if not Resource.objects.filter(process_id=process_id).exists():
+            Resource.objects.create(
+                process_id=process_id,
+                pub_date = timezone.now(),
+                flight_data=flights
+            )
 
         # Add to the result model if not already there
         if not Result.objects.filter(process_id=process_id).exists():
@@ -171,19 +178,19 @@ class ProcessExecutionWithConfirmation(APIView):
         }
         return Response(response, status=202)
 
-class CreateProcessView(APIView):
-    def post(self, request):
-        process_id = int(request.data["process_id"])
-
-
-
-        if not ResourceToConfirmationMapping.objects.filter(process_id=process_id).exists():
-            ResourceToConfirmationMapping.objects.create(
-                process_id=process_id,
-                confirmation_uri=f"http://127.0.0.1:8000/confirmation_server/trigger_confirmation"
-                # or whatever your confirmation URI should be
-            )
-        return Response(status=201)
+# class CreateProcessView(APIView):
+#     def post(self, request):
+#         process_id = int(request.data["process_id"])
+#
+#
+#
+#         if not ResourceToConfirmationMapping.objects.filter(process_id=process_id).exists():
+#             ResourceToConfirmationMapping.objects.create(
+#                 process_id=process_id,
+#                 confirmation_uri=f"http://127.0.0.1:8000/confirmation_server/trigger_confirmation"
+#                 # or whatever your confirmation URI should be
+#             )
+#         return Response(status=201)
 
 
 

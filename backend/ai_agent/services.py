@@ -36,11 +36,11 @@ class AgentService:
                             },
                             "outbound_date":{
                                 "type": "string",
-                                "description":" a date that can be dd-mm-yyyy or mm-dd-yyyy",
+                                "description":" a date that should be formatted as YYYY-MM-DD. e.g. 2026-05-19",
                             },
                             "return_date": {
                                 "type": "string",
-                                "description": " a date that can be dd-mm-yyyy or mm-dd-yyyy",
+                                "description": " a date that should be formatted as YYYY-MM-DD. e.g. 2026-05-19",
                             },
                             "type":{
                                 "type": "integer",
