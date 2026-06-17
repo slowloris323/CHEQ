@@ -34,8 +34,12 @@ class AgentService:
                 1. WestJet via YYC - $1,583 | 13h 40m (1 stop)
                 2. ANA Direct - $1,742 | 10h 10m
                 3. Air Canada Direct - $1,788 | 9h 45m
-
+                
                 Best value: WestJet saves money but adds connection time.
+                When poll_booking_result returns an ACCEPT result, respond with a clear confirmation message like:
+                'Your Air Canada AC3 flight has been confirmed and booked successfully. Have a great trip!'
+                Never give a generic response when a booking result is available
+                
    """
         self.tools = [
             {
@@ -70,8 +74,22 @@ class AgentService:
 
             },
             {
+                "name": "send_confirmation_link",
+                "description": "Call this immediately after the user makes a selection. Sends the user the confirmation link and waits for them to navigate there.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "selected_flight": {
+                            "type": "string",
+                            "description": "Brief description of the selected flight e.g. 'WestJet WS110 - $1,583'"
+                        }
+                    },
+                    "required": ["selected_flight"]
+                }
+            },
+            {
                 "name": "poll_booking_result",
-                "description": "Call this immediately after the user says they  make a selection , send a message to the user with the link  http://127.0.0.1:8000/confirmation_server/  to confirm the flight  and add your information. Polls until the user accepts or rejects the booking on the confirmation page.",
+                "description": "Call this ONLY after send_confirmation_link has been called and the user indicates they have completed the confirmation page.",
                 "input_schema": {
                     "type": "object",
                     "properties": {},
@@ -111,7 +129,8 @@ class AgentService:
 
                         if tool_name == "search_flights":
                             result = self.execute_cheq_flow(params,session_id)
-
+                        elif tool_name == "send_confirmation_link":
+                            result = "http://127.0.0.1:8000/confirmation_server/ — please confirm your booking there."
                         elif tool_name == "poll_booking_result":
 
                             result = self.poll_for_result(
@@ -157,7 +176,7 @@ class AgentService:
             )
 
             if response.status_code != 202:
-                return f"Error: Failed to trigger process {params}"
+                return f"Error: Failed to trigger process"
 
             flights_uri = response.json()
             self.uri_pack = {
@@ -165,17 +184,7 @@ class AgentService:
                 "resource_uri" : flights_uri["resource_uri"],
                 "result_uri" : flights_uri["result_uri"],
             }
-            # confirm_response = httpx.post(
-            #     uri_pack['confirmation_uri'],
-            #     json={"resource_uri": uri_pack['resource_uri']},
-            #     timeout=10.0
-            # )
-            #
-            # if confirm_response.status_code != 200:
-            #     return f"Error: Failed to trigger confirmation for process {params}"
-            #
-            # result_uri = uri_pack['result_uri']
-            # result = self.poll_for_result(result_uri, params)
+
             self._save_uri_pack(session_id)
             return flights_uri["flights"]
 
