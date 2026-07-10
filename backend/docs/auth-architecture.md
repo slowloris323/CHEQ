@@ -8,21 +8,21 @@ We can implement an OAuth 2.0 Client Credentials Grant. The confirmation server 
 
 | Actors | Roles |
 | :---- | :---- |
-| Resource Server | Protects the endpoints, validates tokens against Auth0 |
+| Resource Server | Protects the endpoints, validates tokens using Auth0’s cached JWKS public key |
 | Confirmation Server | Holds client credentials, requests access tokens and calls the resource server |
-| Authorisation Server(Auth0) | Issues client credentials, handles token endpoint, manages client registry  |
+| Authorisation Server(Auth0) | Provides the client credentials at registration(via Dashboard/Application),issues tokens via token endpoint, manages client registry  |
 
 **Credentials Setup**
 
-Auth0 generates the client\_id and client\_secret for the confirmation server when it is registered as a Machine to Machine application in the Auth0 dashboard. These credentials are stored in the confirmation server's environment variables.
+Auth0 generates the client\_id and client\_secret for the confirmation server when it is registered as a Machine to Machine application in the Auth0 dashboard. These credentials are stored in the confirmation server's environment variables since this is only a proof of concept.
 
 **Auth0**
 
 The following will be handled by Auth0
 
 1. Client registry database
-2. The endpoints that issue access tokens and the client credentials
-3. JWT validation middleware: this is intended to protect the endpoints by validating against Auth0 public key to make sure the token is not expired, and the scope meets the requirements for the endpoint
+2. The endpoints that issue access tokens
+3. Auth0 publishes its public signing keys via JWKS, resource server fetches and caches these to validate JWTs
 
 **Confirmation Server Set up**
 
@@ -49,16 +49,14 @@ Confirmation Server → Auth0: POST /oauth/token { client\_id, client\_secret }
 Auth0 → Confirmation Server: { access\_token }
 
 Confirmation Server → Resource Server: GET {resource\_uri}/cheq Bearer \<access\_token\>  
-Resource Server → Auth0: validate token  
-Auth0 → Resource Server: token valid  
+Resource Server: validates JWT locally using cached Auth0 JWKS public key.  
 Resource Server → Confirmation Server: { CHEQ object }
 
 \[User reviews and confirms\]
 
 Confirmation Server → Resource Server: POST {resource\_uri}?accept or ?reject Bearer \<access\_token\> \+ signed CHEQ
 
-Resource Server → Auth0: validate token  
-Auth0 → Resource Server: token valid  
+Resource Server: validates JWT locally using cached Auth0 JWKS public key  
 Resource Server → Confirmation Server: { 200 OK }
 
 \[Resource server verifies both signatures, executes booking\]  
