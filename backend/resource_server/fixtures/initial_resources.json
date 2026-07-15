@@ -1,0 +1,82 @@
+[
+  {
+    "model": "resource_server.resource",
+    "pk": 1,
+    "fields": {
+      "process_id": "1",
+      "pub_date": "2025-09-03T09:04:17.302Z"
+    }
+  },
+  {
+    "model": "resource_server.resource",
+    "pk": 2,
+    "fields": {
+      "process_id": "1",
+      "pub_date": "2025-09-03T09:10:17.302Z"
+    }
+  },
+  {
+    "model": "resource_server.resource",
+    "pk": 3,
+    "fields": {
+      "process_id": "1",
+      "pub_date": "2025-09-03T09:14:17.302Z"
+    }
+  },
+  {
+    "model": "resource_server.resource",
+    "pk": 4,
+    "fields": {
+      "process_id": "2",
+      "pub_date": "2025-09-03T09:04:17.302Z"
+    }
+  },
+  {
+    "model": "resource_server.resource",
+    "pk": 5,
+    "fields": {
+      "process_id": "2",
+      "pub_date": "2025-09-03T09:10:17.302Z"
+    }
+  },
+  {
+    "model": "resource_server.resource",
+    "pk": 6,
+    "fields": {
+      "process_id": "2",
+      "pub_date": "2025-09-03T09:14:17.302Z"
+    }
+  },
+  {
+    "model": "resource_server.resourcetoconfirmationmapping",
+    "pk": 1,
+    "fields": {
+      "process_id": "1",
+      "confirmation_uri": "http://127.0.0.1:8000/confirmation_server/trigger_confirmation"
+    }
+  },
+  {
+    "model": "resource_server.resourcetoconfirmationmapping",
+    "pk": 2,
+    "fields": {
+      "process_id": "2",
+      "confirmation_uri": "http://127.0.0.1:8000/confirmation_server/trigger_confirmation"
+    }
+  },
+  {
+    "model": "resource_server.result",
+    "pk": 1,
+    "fields": {
+      "process_id": "1",
+      "confirmation_status": "pending"
+    }
+  },
+  {
+    "model": "resource_server.result",
+    "pk": 2,
+    "fields": {
+      "process_id": "2",
+      "confirmation_status": "pending"
+    }
+  }
+]
