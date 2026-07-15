@@ -1,6 +1,7 @@
 import uuid
 
 import requests
+# pyrefly: ignore [missing-import]
 from django.http.request import QueryDict
 from django.views import generic
 from django.urls import reverse
@@ -8,13 +9,29 @@ from .models import Resource, ResourceToConfirmationMapping, Result, Process
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser
+from rest_framework.exceptions import AuthenticationFailed
 from .serializers import ResourceSerializer, ResourceToConfirmationMappingSerializer, ResultSerializer
 from datetime import datetime
 from .services import SignatureService
 from django.utils import timezone
-# TODO: publish RSA verification key
+
 host = "http://127.0.0.1:8000"
 valid_decisions = ["ACCEPT", "REJECT"]
+
+def check_auth0_token(request):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        raise AuthenticationFailed("Authorization header is missing.")
+    parts = auth_header.split()
+    if parts[0].lower() != 'bearer':
+        raise AuthenticationFailed("Authorization header must start with Bearer.")
+    elif len(parts) == 1:
+        raise AuthenticationFailed("Token not found.")
+    elif len(parts) > 2:
+        raise AuthenticationFailed("Authorization header must be Bearer token.")
+
+    token = parts[1]
+    return SignatureService.verify_auth0_token(token)
 class IndexView(generic.ListView):
     template_name = "resource_server/index.html"
     context_object_name = "resource_list"
@@ -43,6 +60,11 @@ class ResourceView(APIView):
             return Response(self, status=500)
 
     def post(self, request, process_id):
+        try:
+            check_auth0_token(request)
+        except AuthenticationFailed as e:
+            return Response({"detail": str(e)}, status=401)
+
         data = request.data
         if request.query_params["decision"] not in valid_decisions:
             print(f"Invalid decision")
@@ -61,7 +83,7 @@ class ResourceView(APIView):
 
         CHEQ = data["signed_CHEQ"]
         try:
-            verifed_cheq = SignatureService.verify(self,CHEQ)
+            verifed_cheq = SignatureService.verify(self, CHEQ)
         except Exception as e:
             return Response(status=400)
         signed_process_id = verifed_cheq['CHEQ']["operation name"]
@@ -76,12 +98,16 @@ class ResourceView(APIView):
                     return Response("Decision for this process already submitted", status=400)
             except Exception as e:
                 raise e
-        return Response("Process id mismatch",status=400)
+        return Response("Process id mismatch", status=400)
 
 
 class ResourceCHEQView(APIView):
     def get(self, request, process_id):
-        #TODO: this needs to be gated behind confirmation server auth
+        try:
+            check_auth0_token(request)
+        except AuthenticationFailed as e:
+            return Response({"detail": str(e)}, status=401)
+
         if process_id:
             if type(process_id) is int:
                 resources = Resource.objects.filter(process_id=process_id)
