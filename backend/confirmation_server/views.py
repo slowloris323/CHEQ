@@ -71,9 +71,7 @@ class PerformView(APIView):
         #{"resource_uri": "http://127.0.0.1:8000/resource_server/resource/1/", "decision": "accept"}
         if type(data) is not dict:
             return Response(status=415)
-        if len(data.keys()) != 2:
-            return Response(status=422)
-        if ("resource_uri" not in data.keys()) and ("decision" not in data.keys):
+        if "resource_uri" not in data or "decision" not in data:
             return Response("Request body must contain resource_uri and decision clauses", status=422)
 
         resource_uri_validator = URLValidator(schemes=['http', 'https'])
@@ -90,6 +88,9 @@ class PerformView(APIView):
         else:
             decision = data["decision"]
 
+        # Extract extra fields (secure direct inputs)
+        extra_data = {k: v for k, v in data.items() if k not in ["resource_uri", "decision"]}
+
         #get cheq object from DB, and send to RS along with decision
         try:
             CHEQ_query = ResourceUriCheqMapping.objects.filter(resource_uri=resource_uri)
@@ -97,15 +98,15 @@ class PerformView(APIView):
 
             if CHEQ_serializer:
                 CHEQ = CHEQ_serializer.data[0]['CHEQ']['CHEQ']
-                response = ConfirmationService.sendDecisionToRS(self, CHEQ, decision, resource_uri)
+                response = ConfirmationService.sendDecisionToRS(self, CHEQ, decision, resource_uri, extra_data=extra_data)
                 if response.status_code == 200:
                     return Response("Decision sent", status=200)
                 else:
-                    return Response(response, status=400)
+                    return Response(response.text, status=400)
             else:
                 return Response("No CHEQ object registered for this resource URI", status=400)
         except Exception as e:
-            return Response("No CHEQ object registered for this resource URI", status=400)
+            return Response("Error processing decision: " + str(e), status=400)
 
 
 

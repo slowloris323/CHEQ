@@ -78,7 +78,7 @@ class ConfirmationService:
         except Exception as e:
             raise e
 
-    def sendDecisionToRS(self, CHEQ, decision, resource_uri):
+    def sendDecisionToRS(self, CHEQ, decision, resource_uri, extra_data=None):
         signed_cheq = ConfirmationService.sign(self, CHEQ)
         headers = {
             "Authorization": f"Bearer {get_access_token()}"

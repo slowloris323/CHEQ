@@ -89,7 +89,9 @@ class AgentService:
             },
             {
                 "name": "poll_booking_result",
-                "description": "Call this ONLY after send_confirmation_link has been called and the user indicates they have completed the confirmation page.",
+                "description": "Call this ONLY after send_confirmation_link has been called and the user indicates they have completed the confirmation page.Proved"
+                               "a comprihensive summaries of the flight information #",
+
                 "input_schema": {
                     "type": "object",
                     "properties": {},
@@ -130,7 +132,22 @@ class AgentService:
                         if tool_name == "search_flights":
                             result = self.execute_cheq_flow(params,session_id)
                         elif tool_name == "send_confirmation_link":
-                            result = "http://127.0.0.1:8000/confirmation_server/ — please confirm your booking there."
+                            selected_flight = params.get("selected_flight")
+                            self._load_uri_pack(session_id)
+                            if self.uri_pack and "resource_uri" in self.uri_pack:
+                                try:
+                                    httpx.post(
+                                        self.uri_pack["resource_uri"] + "select_flight/",
+                                        json={"selected_flight": selected_flight},
+                                        timeout=10.0
+                                    )
+                                    react_url = f"/?resource_uri={self.uri_pack['resource_uri']}"
+                                    result = f"[Please click here to confirm your booking]({react_url})"
+                                except Exception as e:
+                                    print(f"Error saving flight selection to resource server: {e}")
+                                    result = f"[Please click here to return]({react_url})"
+                            else:
+                                result = f"Could not find confirmation URL. Please try again."
                         elif tool_name == "poll_booking_result":
 
                             result = self.poll_for_result(
@@ -229,14 +246,117 @@ class AgentService:
 
     def clear_memory(self, session_id="default"):
         thread_id = f"session_{session_id}"
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {"configurable":
+                      {"thread_id": thread_id, "checkpoint_ns": ""}
+                  }
+
+        checkpoint_data = {
+            "v": 1,
+            "id": str(uuid.uuid4()),
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "channel_values": {"messages": []},
+            "channel_versions": {},
+            "versions_seen": {},
+            "pending_sends": [],
+        }
 
         self.memory.put(
             config,
-            {"messages": []},
+            checkpoint_data,
             {},
             {}
         )
+        try:
+            self.db_conn.execute("DELETE FROM uri_pack WHERE session_id = ?", (session_id,))
+            self.db_conn.commit()
+        except Exception:
+            pass
+
+    def get_all_chats(self):
+        cursor = self.db_conn.cursor()
+        cursor.execute("SELECT DISTINCT thread_id FROM checkpoints")
+        threads = cursor.fetchall()
+        
+        chat_list = []
+        for t in threads:
+            thread_id = t[0]
+            # Ensure it is a user session
+            if not thread_id.startswith("session_"):
+                continue
+            
+            # Remove only the first "session_" prefix to get the session_id
+            session_id = thread_id[len("session_"):]
+
+            config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+            checkpoint = self.memory.get_tuple(config)
+            
+            if checkpoint and checkpoint.checkpoint:
+                messages = checkpoint.checkpoint.get("channel_values", {}).get("messages", [])
+                ts = checkpoint.checkpoint.get("ts", "")
+                
+                title = "New Chat"
+                for msg in messages:
+                    if msg.__class__.__name__ == "HumanMessage" or getattr(msg, 'type', '') == 'human':
+                        title = getattr(msg, 'content', str(msg))
+                        if len(title) > 40:
+                            title = title[:40] + "..."
+                        break
+                
+                chat_list.append({
+                    "session_id": session_id,
+                    "title": title,
+                    "updated_at": ts
+                })
+        
+        chat_list.sort(key=lambda x: x["updated_at"], reverse=True)
+        return chat_list
+
+    def get_chat_messages(self, session_id):
+        # We always prefix session_id with "session_" to reconstruct the DB thread_id
+        thread_id = f"session_{session_id}"
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+        checkpoint = self.memory.get_tuple(config)
+        
+        frontend_messages = []
+        frontend_messages.append({
+            "id": 1,
+            "message": "Hi! How can I help you today?",
+            "type": "Bot"
+        })
+        
+        if checkpoint and checkpoint.checkpoint:
+            messages = checkpoint.checkpoint.get("channel_values", {}).get("messages", [])
+            for idx, msg in enumerate(messages):
+                msg_type = msg.__class__.__name__
+                
+                if msg_type == "HumanMessage" or getattr(msg, 'type', '') == 'human':
+                    content = getattr(msg, 'content', '')
+                    if content:
+                        frontend_messages.append({
+                            "id": idx + 2,
+                            "message": content,
+                            "type": "User"
+                        })
+                elif msg_type == "AIMessage" or getattr(msg, 'type', '') == 'ai':
+                    content = getattr(msg, 'content', '')
+                    if isinstance(content, list):
+                        text_blocks = [block.get('text', '') for block in content if isinstance(block, dict) and block.get('type') == 'text']
+                        content = "\n".join(text_blocks)
+                    if content:
+                        frontend_messages.append({
+                            "id": idx + 2,
+                            "message": content,
+                            "type": "Bot"
+                        })
+        return frontend_messages
+
+    def delete_chat(self, session_id):
+        thread_id = f"session_{session_id}"
+        cursor = self.db_conn.cursor()
+        cursor.execute("DELETE FROM checkpoints WHERE thread_id = ?", (thread_id,))
+        cursor.execute("DELETE FROM writes WHERE thread_id = ?", (thread_id,))
+        cursor.execute("DELETE FROM uri_pack WHERE session_id = ?", (session_id,))
+        self.db_conn.commit()
 
     def _save_uri_pack(self, session_id):
         self.db_conn.execute(
