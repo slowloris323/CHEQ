@@ -15,8 +15,9 @@ class Resource(models.Model):
     def __str__(self):
         return f"{self.process_id}"
 
-    def get_all_steps_in_process(self, process_id):
-        return self.process_id == process_id
+    @classmethod
+    def get_all_steps_in_process(cls, process_id):
+        return cls.objects.filter(process_id=process_id)
 
 class ResourceToConfirmationMapping(models.Model):
     process_id = models.IntegerField() #this is the field that will join a process to a confirmation URI
