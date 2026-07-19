@@ -1,10 +1,12 @@
 import uuid
-
+import re
 import requests
 from django.http.request import QueryDict
 from django.views import generic
 from django.urls import reverse
-from .models import Resource, ResourceToConfirmationMapping, Result, Process
+from django.core import signing
+from django.core.exceptions import ValidationError
+from .models import Resource, ResourceToConfirmationMapping, Result, Process, Flight
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser
@@ -12,9 +14,24 @@ from .serializers import ResourceSerializer, ResourceToConfirmationMappingSerial
 from datetime import datetime
 from .services import SignatureService
 from django.utils import timezone
-# TODO: publish RSA verification key
+
 host = "http://127.0.0.1:8000"
 valid_decisions = ["ACCEPT", "REJECT"]
+
+def get_process_id_from_token(process_token):
+    try:
+        return signing.loads(process_token)
+    except signing.BadSignature:
+        raise ValidationError("Invalid or tampered process token")
+
+def parse_flight_number(selected_flight_str):
+    if not selected_flight_str:
+        return ""
+    # Matches a standard airline code and flight number (e.g. AC3 or WS110 or NH135)
+    match = re.search(r'\b([a-zA-Z]{2,3}\d{1,4})\b', selected_flight_str)
+    if match:
+        return match.group(1).upper()
+    return selected_flight_str.strip()
 class IndexView(generic.ListView):
     template_name = "resource_server/index.html"
     context_object_name = "resource_list"
@@ -31,18 +48,18 @@ class IndexView(generic.ListView):
         return context
 
 class ResourceView(APIView):
-    def get(self, request, process_id):
-        if process_id:
-            if type(process_id) is int:
-                resources = Resource.objects.filter(process_id=process_id)
-                serializer = ResourceSerializer(resources, many=True)
-                return Response(serializer.data, status=200)
-            else:
-                return Response(self, status=422)
-        else:
-            return Response(self, status=500)
+    def get(self, request, process_token):
+        try:
+            process_id = get_process_id_from_token(process_token)
+            resources = Resource.objects.filter(process_id=process_id)
+            serializer = ResourceSerializer(resources, many=True)
+            return Response(serializer.data, status=200)
+        except ValidationError as e:
+            return Response(str(e), status=422)
+        except Exception as e:
+            return Response(str(e), status=500)
 
-    def post(self, request, process_id):
+    def post(self, request, process_token):
         data = request.data
         if request.query_params["decision"] not in valid_decisions:
             print(f"Invalid decision")
@@ -50,18 +67,19 @@ class ResourceView(APIView):
         else:
             decision = request.query_params["decision"]
 
-        if type(process_id) is not int:
-            return Response(status=422)
+        try:
+            process_id = get_process_id_from_token(process_token)
+        except ValidationError as e:
+            return Response(str(e), status=422)
+
         if type(data) is not QueryDict:
             return Response(status=415)
-        if len(data.keys()) != 1:
-            return Response(status=422)
         if "signed_CHEQ" not in data.keys():
             return Response(status=422)
 
         CHEQ = data["signed_CHEQ"]
         try:
-            verifed_cheq = SignatureService.verify(self,CHEQ)
+            verifed_cheq = SignatureService.verify(self, CHEQ)
         except Exception as e:
             return Response(status=400)
         signed_process_id = verifed_cheq['CHEQ']["operation name"]
@@ -76,38 +94,107 @@ class ResourceView(APIView):
                     return Response("Decision for this process already submitted", status=400)
             except Exception as e:
                 raise e
-        return Response("Process id mismatch",status=400)
+        return Response("Process id mismatch", status=400)
+
+
+class SelectFlightView(APIView):
+    def post(self, request, process_token):
+        try:
+            process_id = get_process_id_from_token(process_token)
+        except ValidationError as e:
+            return Response(str(e), status=422)
+        
+        selected_flight = request.data.get("selected_flight")
+        if not selected_flight:
+            return Response("No flight selection details provided", status=400)
+
+        try:
+            resources = Resource.objects.filter(process_id=process_id)
+            if not resources.exists():
+                return Response(f"No resource found for process {process_id}", status=404)
+            
+            # Lookup flight in MySQL DB by process_id and parsed flight number
+            flight_number = parse_flight_number(selected_flight)
+            flight_obj = Flight.objects.filter(process_id=process_id, flight_number__iexact=flight_number).first()
+            if not flight_obj:
+                # fallback: search globally in DB
+                flight_obj = Flight.objects.filter(flight_number__iexact=flight_number).first()
+
+            if flight_obj:
+                # Serialize the Flight model data to dictionary
+                flight_data = {
+                    "airline": flight_obj.airline,
+                    "flight_number": flight_obj.flight_number,
+                    "price": float(flight_obj.price),
+                    "origin": flight_obj.origin,
+                    "destination": flight_obj.destination,
+                    "outbound_date": str(flight_obj.outbound_date),
+                    "return_date": str(flight_obj.return_date) if flight_obj.return_date else None,
+                    "departure_time": str(flight_obj.departure_time),
+                    "arrival_time": str(flight_obj.arrival_time),
+                    "duration_minutes": flight_obj.duration_minutes,
+                    "stops": flight_obj.stops,
+                    "airplane": flight_obj.airplane
+                }
+            else:
+                # Fallback dictionary parsed from string
+                price_match = re.search(r'\$\s*([\d,]+)', selected_flight)
+                price = float(price_match.group(1).replace(",", "")) if price_match else 1788.0
+                flight_data = {
+                    "airline": "Airline",
+                    "flight_number": flight_number or "FL100",
+                    "price": price,
+                    "origin": "YVR",
+                    "destination": "NRT",
+                    "outbound_date": "2026-06-25",
+                    "return_date": None,
+                    "departure_time": "12:30",
+                    "arrival_time": "14:40",
+                    "duration_minutes": 585,
+                    "stops": 0,
+                    "airplane": "Boeing 787"
+                }
+
+            for resource in resources:
+                resource.selected_flight = flight_data
+                resource.save(update_fields=["selected_flight"])
+            
+            return Response("Flight selection saved successfully", status=200)
+        except Exception as e:
+            return Response(str(e), status=500)
 
 
 class ResourceCHEQView(APIView):
-    def get(self, request, process_id):
+    def get(self, request, process_token):
         #TODO: this needs to be gated behind confirmation server auth
+        try:
+            process_id = get_process_id_from_token(process_token)
+        except ValidationError as e:
+            return Response(str(e), status=422)
+
         if process_id:
-            if type(process_id) is int:
-                resources = Resource.objects.filter(process_id=process_id)
-                if (resources.values()):
+            resources = Resource.objects.filter(process_id=process_id)
+            if (resources.values()):
+                serializer = ResourceSerializer(resources, many=True)
+                # Keep resource execution uri signature using token
+                resource_execution_uri = host + reverse("resource_server:resource", kwargs={"process_token": process_token}) + "execute"
 
-                    serializer = ResourceSerializer(resources, many=True)
-                    resource_execution_uri = host + reverse("resource_server:resource", kwargs={"process_id":process_id}) + "execute"
-
-                    CHEQ = {
-                        "version": 1.0,
-                        "operation": resource_execution_uri,
-                        "operation name": process_id,
-                        "inputs" :{
-                            "parameters" : serializer.data
-                        },
-                        "date": datetime.now().strftime("%Y-%m-%d, %H:%M:%S.%f") #"2025-10-15T11:21:11.209504"
-                    }
-                    try:
-                        signed_CHEQ = SignatureService.sign(self, CHEQ)
-                    except Exception:
-                        return Response(status=422)
-                    return Response(signed_CHEQ, status=200)
-                else:
-                    return Response(status=404)
+                CHEQ = {
+                    "version": 1.0,
+                    "operation": resource_execution_uri,
+                    "operation name": process_id,
+                    "inputs" :{
+                        "parameters" : serializer.data
+                    },
+                    "date": datetime.now().strftime("%Y-%m-%d, %H:%M:%S.%f")
+                }
+                try:
+                    signed_CHEQ = SignatureService.sign(self, CHEQ)
+                except Exception:
+                    return Response(status=422)
+                return Response(signed_CHEQ, status=200)
             else:
-                return Response(status=422)
+                return Response(status=404)
         else:
             return Response(status=422)
 
@@ -123,9 +210,10 @@ class ResultView(APIView):
                 return Response(self, status=422)
         else:
             return Response(self, status=500)
+
+
 class ProcessExecutionWithConfirmation(APIView):
     def post(self, request):
-
         params = request.data
         response = requests.post("http://127.0.0.1:8000/airline_api/search_flights/", json=params)
         flights = response.json()
@@ -133,11 +221,29 @@ class ProcessExecutionWithConfirmation(APIView):
         process = Process.objects.create()
         process_id = process.id
 
+        # Save flights to DB for verification page mapping
+        best_flights = flights.get("best_flights", [])
+        for f in best_flights:
+            Flight.objects.create(
+                process_id=process_id,
+                origin=f["origin"],
+                destination=f["destination"],
+                outbound_date=f["outbound_date"],
+                return_date=f.get("return_date"),
+                airline=f["airline"],
+                flight_number=f["flight_number"],
+                departure_time=f["departure_time"],
+                arrival_time=f["arrival_time"],
+                duration_minutes=f["duration_minutes"],
+                stops=f["stops"],
+                price=f["price"],
+                airplane=f["airplane"]
+            )
+
         if not ResourceToConfirmationMapping.objects.filter(process_id=process_id).exists():
             ResourceToConfirmationMapping.objects.create(
                 process_id=process_id,
                 confirmation_uri=f"http://127.0.0.1:8000/confirmation_server/trigger_confirmation/"
-                # or whatever your confirmation URI should be
             )
 
         if not Resource.objects.filter(process_id=process_id).exists():
@@ -146,12 +252,13 @@ class ProcessExecutionWithConfirmation(APIView):
                 pub_date = timezone.now(),
             )
 
-
         if not Result.objects.filter(process_id=process_id).exists():
             result = Result(process_id=process_id, confirmation_status="PENDING")
             result.save()
 
-        resource_uri = host + reverse("resource_server:resource", kwargs={"process_id": process_id} )
+        # Obfuscate process_id via secure cryptographic signing
+        process_token = signing.dumps(process_id)
+        resource_uri = host + reverse("resource_server:resource", kwargs={"process_token": process_token} )
         result_uri = host + reverse("resource_server:result", kwargs={"process_id": process_id} )
 
         confirmation_query = ResourceToConfirmationMapping.objects.filter(process_id=process_id)

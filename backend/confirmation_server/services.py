@@ -32,15 +32,12 @@ class ConfirmationService:
         except Exception as e:
             raise e
 
-    def sendDecisionToRS(self, CHEQ, decision, resource_uri):
+    def sendDecisionToRS(self, CHEQ, decision, resource_uri, extra_data=None):
         signed_cheq = ConfirmationService.sign(self, CHEQ)
+        payload = {"signed_CHEQ": signed_cheq}
+        if extra_data:
+            payload.update(extra_data)
         response = requests.post(resource_uri,
-                                 data={"signed_CHEQ": signed_cheq},
+                                 data=payload,
                                  params={"decision": decision})
-        return response
-    def sendDecisionToRS(self, CHEQ, decision, resource_uri):
-        signed_cheq = ConfirmationService.sign(self, CHEQ)
-        response=requests.post(resource_uri,
-                               data={"signed_CHEQ": signed_cheq},
-                               params={"decision":decision})
         return response

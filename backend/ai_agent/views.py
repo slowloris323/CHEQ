@@ -63,3 +63,35 @@ class ClearMemoryView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ChatsView(APIView):
+    def get(self, request):
+        try:
+            agent = AgentService()
+            chats = agent.get_all_chats()
+            return Response(chats, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        session_id = request.data.get("session_id")
+        if not session_id:
+            return Response({"error": "No session_id provided"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            agent = AgentService()
+            messages = agent.get_chat_messages(session_id)
+            return Response(messages, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request):
+        session_id = request.data.get("session_id") or request.query_params.get("session_id")
+        if not session_id:
+            return Response({"error": "No session_id provided"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            agent = AgentService()
+            agent.delete_chat(session_id)
+            return Response({"message": f"Chat {session_id} deleted successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

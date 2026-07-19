@@ -9,11 +9,22 @@ from django.urls import reverse
 
 
 class ResourceModelTests(TestCase):
-    def test_process_1_has_5_items(self):
+    def test_resource_stores_selected_flight(self):
         """
-        process 1 has 5 steps in it
+        A resource can store selected flight details in JSON format
         """
-        resource = Resource()
-        process_1 = resource.get_all_steps_in_process(process_id=1)
-        self.assertIs(len(process_1), 5)
+        flight_data = {
+            "airline": "Air Canada",
+            "flight_number": "AC3",
+            "price": 1788.00
+        }
+        resource = Resource.objects.create(
+            process_id=123,
+            pub_date=timezone.now(),
+            selected_flight=flight_data
+        )
+        saved_resource = Resource.objects.get(id=resource.id)
+        self.assertEqual(saved_resource.selected_flight["airline"], "Air Canada")
+        self.assertEqual(saved_resource.selected_flight["flight_number"], "AC3")
+        self.assertEqual(float(saved_resource.selected_flight["price"]), 1788.00)
 
