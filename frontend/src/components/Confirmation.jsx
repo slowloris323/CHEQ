@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useAuth0 } from "@auth0/auth0-react";
 
 const getCsrfToken = () => {
   return document.cookie
@@ -16,7 +17,8 @@ const airportNames = {
   "JFK": "John F. Kennedy Int'l Airport"
 };
 
-export default function Confirmation({ resourceUri, onBack }) {
+export default function Confirmation({ resourceUri, accessToken, onBack }) {
+  const { user, logout } = useAuth0();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cheqPayload, setCheqPayload] = useState(null);
@@ -47,12 +49,17 @@ export default function Confirmation({ resourceUri, onBack }) {
     setLoading(true);
     setError(null);
     try {
+      const headers = {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCsrfToken(),
+      };
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+      }
+
       const response = await fetch("http://127.0.0.1:8000/confirmation_server/trigger_confirmation/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": getCsrfToken(),
-        },
+        headers: headers,
         body: JSON.stringify({ resource_uri: resourceUri }),
       });
 
@@ -99,12 +106,17 @@ export default function Confirmation({ resourceUri, onBack }) {
         bodyPayload.card_cvv = cardCvv;
       }
 
+      const headers = {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCsrfToken(),
+      };
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+      }
+
       const response = await fetch(performUri || "http://127.0.0.1:8000/confirmation_server/perform_confirmation", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": getCsrfToken(),
-        },
+        headers: headers,
         body: JSON.stringify(bodyPayload),
       });
 
@@ -208,26 +220,30 @@ export default function Confirmation({ resourceUri, onBack }) {
             className="profile-avatar-trigger"
             onClick={() => setShowUserDropdown(!showUserDropdown)}
           >
-            U
+            {user?.picture ? (
+              <img src={user.picture} alt={user?.name || "User"} className="profile-avatar-img" />
+            ) : (
+              user?.name ? user.name[0].toUpperCase() : "U"
+            )}
           </div>
           
           {showUserDropdown && (
             <div className="dropdown-menu">
               <div className="dropdown-user-details">
-                <span className="dropdown-user-name">User Account</span>
-                <span className="dropdown-user-email">session_active</span>
+                <span className="dropdown-user-name">{user?.name || "User Account"}</span>
+                <span className="dropdown-user-email">{user?.email || "session_active"}</span>
               </div>
               <button 
                 className="dropdown-btn"
                 onClick={() => {
                   setShowUserDropdown(false);
-                  onBack();
+                  logout({ logoutParams: { returnTo: window.location.origin } });
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
                 </svg>
-                Exit Page
+                Sign Out
               </button>
             </div>
           )}
