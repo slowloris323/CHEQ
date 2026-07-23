@@ -3,6 +3,7 @@ import './App.css'
 import Chat from './components/Chat'
 import Confirmation from './components/Confirmation'
 import Sidebar from './components/Sidebar'
+import { useAuth0 } from '@auth0/auth0-react'
 
 function App() {
   const [resourceUri, setResourceUri] = useState(null)
@@ -13,6 +14,10 @@ function App() {
   const [messages, setMessages] = useState([
     { id: 1, message: "Hi! How can I help you today?", type: "Bot" },
   ])
+
+  // Auth0 Hook integration
+  const { isAuthenticated, isLoading, loginWithRedirect, getAccessTokenSilently } = useAuth0()
+  const [accessToken, setAccessToken] = useState(null)
 
   const fetchChats = async () => {
     try {
@@ -105,13 +110,54 @@ function App() {
     }
   }, [])
 
+  // Auth0 Side Effect: Trigger login redirect if resourceUri is set and not authenticated
+  useEffect(() => {
+    if (resourceUri && !isLoading) {
+      if (!isAuthenticated) {
+        loginWithRedirect({
+          appState: { resourceUri }
+        })
+      } else if (!accessToken) {
+        const fetchAccessToken = async () => {
+          try {
+            const token = await getAccessTokenSilently({
+              authorizationParams: {
+                audience: import.meta.env.VITE_AUTH0_AUDIENCE
+              }
+            })
+            setAccessToken(token)
+          } catch (e) {
+            console.error("Failed to get Auth0 access token silently", e)
+          }
+        }
+        fetchAccessToken()
+      }
+    }
+  }, [resourceUri, isAuthenticated, isLoading, accessToken])
+
   if (resourceUri) {
-    return <Confirmation resourceUri={resourceUri} onBack={(decision) => {
-      setPendingFeedback(decision || null)
-      window.history.pushState({}, document.title, '/')
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    }} />
+    if (isLoading || !isAuthenticated || !accessToken) {
+      return (
+        <div className="auth-loading-container">
+          <div className="spinner"></div>
+          <p>Verifying authentication session...</p>
+        </div>
+      )
+    }
+
+    return (
+      <Confirmation 
+        resourceUri={resourceUri} 
+        accessToken={accessToken}
+        onBack={(decision) => {
+          setPendingFeedback(decision || null)
+          window.history.pushState({}, document.title, '/')
+          window.dispatchEvent(new PopStateEvent('popstate'))
+        }} 
+      />
+    )
   }
+
 
   return (
     <div className="app-layout">

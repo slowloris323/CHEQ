@@ -238,11 +238,13 @@ class ProcessExecutionWithConfirmation(APIView):
         response = requests.post("http://127.0.0.1:8000/airline_api/search_flights/", json=params)
         flights = response.json()
 
+
         process = Process.objects.create()
         process_id = process.id
 
         # Save flights to DB for verification page mapping
         best_flights = flights.get("best_flights", [])
+
         for f in best_flights:
             Flight.objects.create(
                 process_id=process_id,

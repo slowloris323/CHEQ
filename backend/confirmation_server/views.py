@@ -6,7 +6,8 @@ from rest_framework.response import Response
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 from django.urls import reverse
-
+from rest_framework.permissions import IsAuthenticated
+from .auth import Auth0JWTAuthentication
 
 from .serializers import ResourceUriCheqMappingSerializer
 from .services import ConfirmationService
@@ -28,8 +29,10 @@ class IndexView(generic.ListView):
         return True
 
 class TriggerView(APIView):
+    authentication_classes = [Auth0JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
-        #TODO: implement user auth
         data = request.data
         #first need to validate and extract the resource URI
         if type(data) is not dict:
@@ -65,6 +68,9 @@ class TriggerView(APIView):
             return Response(status=500)
 
 class PerformView(APIView):
+    authentication_classes = [Auth0JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         data = request.data
         #Input validation

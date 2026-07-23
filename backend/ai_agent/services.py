@@ -90,7 +90,7 @@ class AgentService:
             {
                 "name": "poll_booking_result",
                 "description": "Call this ONLY after send_confirmation_link has been called and the user indicates they have completed the confirmation page.Proved"
-                               "a comprihensive summaries of the flight information #",
+                               "a comprehensive summaries of the flight information #",
 
                 "input_schema": {
                     "type": "object",
