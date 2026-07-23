@@ -9,22 +9,43 @@ from django.urls import reverse
 
 
 class ResourceModelTests(TestCase):
-    def test_resource_stores_selected_flight(self):
+    fixtures = ['initial_resources.json']
+
+    def test_process_1_has_3_items(self):
         """
-        A resource can store selected flight details in JSON format
+        process 1 has 3 steps in it
         """
-        flight_data = {
-            "airline": "Air Canada",
-            "flight_number": "AC3",
-            "price": 1788.00
-        }
-        resource = Resource.objects.create(
-            process_id=123,
-            pub_date=timezone.now(),
-            selected_flight=flight_data
-        )
-        saved_resource = Resource.objects.get(id=resource.id)
-        self.assertEqual(saved_resource.selected_flight["airline"], "Air Canada")
-        self.assertEqual(saved_resource.selected_flight["flight_number"], "AC3")
-        self.assertEqual(float(saved_resource.selected_flight["price"]), 1788.00)
+        process_1 = Resource.get_all_steps_in_process(process_id=1)
+        self.assertEqual(len(process_1), 3)
+
+
+from unittest.mock import patch
+from rest_framework.test import APITestCase
+
+class ResourceServerAuthTests(APITestCase):
+    fixtures = ['initial_resources.json']
+
+    def test_get_cheq_without_auth_header_fails(self):
+        url = reverse('resource_server:resource_cheq', kwargs={"process_id": 1})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("Authorization header is missing", response.data["detail"])
+
+    def test_get_cheq_with_invalid_auth_header_fails(self):
+        url = reverse('resource_server:resource_cheq', kwargs={"process_id": 1})
+        response = self.client.get(url, HTTP_AUTHORIZATION="invalid_format")
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("must start with Bearer", response.data["detail"])
+
+    @patch('resource_server.views.SignatureService.verify_auth0_token')
+    def test_get_cheq_with_valid_token_succeeds(self, mock_verify):
+        mock_verify.return_value = {"sub": "mock-m2m-client"}
+        url = reverse('resource_server:resource_cheq', kwargs={"process_id": 1})
+        response = self.client.get(url, HTTP_AUTHORIZATION="Bearer valid_token")
+        self.assertEqual(response.status_code, 200)
+
+    def test_post_decision_without_auth_header_fails(self):
+        url = reverse('resource_server:resource', kwargs={"process_id": 1})
+        response = self.client.post(url, data={"signed_CHEQ": "token"}, QUERY_STRING="decision=ACCEPT")
+        self.assertEqual(response.status_code, 401)
 

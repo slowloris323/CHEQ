@@ -153,3 +153,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# Auth0 Configuration
+AUTH0_DOMAIN = os.getenv('AUTH0_DOMAIN')
+AUTH0_CLIENT_ID = os.getenv('AUTH0_CLIENT_ID')
+AUTH0_CLIENT_SECRET = os.getenv('AUTH0_CLIENT_SECRET')
+AUTH0_AUDIENCE = os.getenv('AUTH0_AUDIENCE')

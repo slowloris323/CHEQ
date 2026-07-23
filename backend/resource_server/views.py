@@ -1,6 +1,7 @@
 import uuid
 import re
 import requests
+# pyrefly: ignore [missing-import]
 from django.http.request import QueryDict
 from django.views import generic
 from django.urls import reverse
@@ -10,6 +11,7 @@ from .models import Resource, ResourceToConfirmationMapping, Result, Process, Fl
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser
+from rest_framework.exceptions import AuthenticationFailed
 from .serializers import ResourceSerializer, ResourceToConfirmationMappingSerializer, ResultSerializer
 from datetime import datetime
 from .services import SignatureService
@@ -32,6 +34,20 @@ def parse_flight_number(selected_flight_str):
     if match:
         return match.group(1).upper()
     return selected_flight_str.strip()
+def check_auth0_token(request):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        raise AuthenticationFailed("Authorization header is missing.")
+    parts = auth_header.split()
+    if parts[0].lower() != 'bearer':
+        raise AuthenticationFailed("Authorization header must start with Bearer.")
+    elif len(parts) == 1:
+        raise AuthenticationFailed("Token not found.")
+    elif len(parts) > 2:
+        raise AuthenticationFailed("Authorization header must be Bearer token.")
+
+    token = parts[1]
+    return SignatureService.verify_auth0_token(token)
 class IndexView(generic.ListView):
     template_name = "resource_server/index.html"
     context_object_name = "resource_list"
@@ -60,6 +76,10 @@ class ResourceView(APIView):
             return Response(str(e), status=500)
 
     def post(self, request, process_token):
+        try:
+            check_auth0_token(request)
+        except AuthenticationFailed as e:
+            return Response({"detail": str(e)}, status=401)
         data = request.data
         if request.query_params["decision"] not in valid_decisions:
             print(f"Invalid decision")
@@ -113,15 +133,12 @@ class SelectFlightView(APIView):
             if not resources.exists():
                 return Response(f"No resource found for process {process_id}", status=404)
             
-            # Lookup flight in MySQL DB by process_id and parsed flight number
             flight_number = parse_flight_number(selected_flight)
             flight_obj = Flight.objects.filter(process_id=process_id, flight_number__iexact=flight_number).first()
             if not flight_obj:
-                # fallback: search globally in DB
                 flight_obj = Flight.objects.filter(flight_number__iexact=flight_number).first()
 
             if flight_obj:
-                # Serialize the Flight model data to dictionary
                 flight_data = {
                     "airline": flight_obj.airline,
                     "flight_number": flight_obj.flight_number,
@@ -137,7 +154,6 @@ class SelectFlightView(APIView):
                     "airplane": flight_obj.airplane
                 }
             else:
-                # Fallback dictionary parsed from string
                 price_match = re.search(r'\$\s*([\d,]+)', selected_flight)
                 price = float(price_match.group(1).replace(",", "")) if price_match else 1788.0
                 flight_data = {
@@ -166,7 +182,11 @@ class SelectFlightView(APIView):
 
 class ResourceCHEQView(APIView):
     def get(self, request, process_token):
-        #TODO: this needs to be gated behind confirmation server auth
+        try:
+            check_auth0_token(request)
+        except AuthenticationFailed as e:
+            return Response({"detail": str(e)}, status=401)
+
         try:
             process_id = get_process_id_from_token(process_token)
         except ValidationError as e:

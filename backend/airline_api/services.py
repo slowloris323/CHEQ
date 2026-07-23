@@ -9,7 +9,6 @@ class AirlineService:
         origin = params['origin']
         destination = params['destination']
         outbound_date = params['outbound_date']
-
         airlines = ["Delta Air Lines", "United Airlines", "American Airlines", "British Airways", "Air Canada", "Lufthansa","United Arab Emirates"]
         airplanes = ["Boeing 787 Dreamliner", "Airbus A320", "Boeing 777", "Airbus A350"]
         
